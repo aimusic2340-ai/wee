@@ -277,7 +277,7 @@ export function DashboardPage({
                   </div>
                   <div className="text-right shrink-0">
                     <p className="text-sm font-bold text-white">
-                      ZMW {order.total.toFixed(2)}
+                      ZMW {order.subtotal.toFixed(2)}
                     </p>
                     <p className="text-xs text-white/70">{formatTime(order.createdAt)}</p>
                   </div>

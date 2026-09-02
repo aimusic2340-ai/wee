@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback, useEffect, useRef } from "react"
+import { useState, useCallback, useEffect, useMemo, useRef } from "react"
 import { onAuthStateChanged, signOut, type User } from "firebase/auth"
 import { doc, collection, getDocs, deleteDoc, onSnapshot, type DocumentSnapshot } from "firebase/firestore"
 import { auth, db } from "@/lib/firebase"
@@ -260,12 +260,39 @@ export default function MerchantApp() {
     }))
   }, [])
 
+  const latestPending = useMemo(() => pendingOrders[0] ?? null, [pendingOrders])
+  const latestPayment = useMemo(() => allOrders.find((order) => ["accepted", "ready_for_pickup", "at_store", "picked_up", "delivered", "completed"].includes(order.status)) ?? null, [allOrders])
+  const latestDriver = useMemo(() => allOrders.find((order) => Boolean(order.driverSnapshot && order.driverStatus)) ?? null, [allOrders])
+  const notificationKey = currentUserId ? `wee-notifications:${currentUserId}` : null
+  const [viewedNotificationIds, setViewedNotificationIds] = useState<Record<string, string>>({})
+
+  useEffect(() => {
+    if (!notificationKey) { setViewedNotificationIds({}); return }
+    try { setViewedNotificationIds(JSON.parse(localStorage.getItem(notificationKey) || "{}")) } catch { setViewedNotificationIds({}) }
+  }, [notificationKey])
+
+  const markCategoryViewed = useCallback((category: string, orderId?: string) => {
+    if (!notificationKey || !orderId) return
+    setViewedNotificationIds((prev) => {
+      const next = { ...prev, [category]: orderId }
+      localStorage.setItem(notificationKey, JSON.stringify(next))
+      return next
+    })
+  }, [notificationKey])
+
   const handleMarkAllRead = useCallback(() => {
-    setStoreData((prev) => ({
-      ...prev,
-      notifications: prev.notifications.map((n) => ({ ...n, read: true })),
-    }))
-  }, [])
+    if (!notificationKey) return
+    const next = { new_order: latestPending?.id || "none", payment_captured: latestPayment?.id || "none", driver_assigned: latestDriver?.id || "none" }
+    localStorage.setItem(notificationKey, JSON.stringify(next))
+    setViewedNotificationIds(next)
+  }, [notificationKey, latestPending, latestPayment, latestDriver])
+
+  const unreadCategories = {
+    new_order: Boolean(latestPending && viewedNotificationIds.new_order !== latestPending.id),
+    payment_captured: Boolean(latestPayment && viewedNotificationIds.payment_captured !== latestPayment.id),
+    driver_assigned: Boolean(latestDriver && viewedNotificationIds.driver_assigned !== latestDriver.id),
+  }
+  const unreadCount = Object.values(unreadCategories).filter(Boolean).length
 
   const handleLogout = useCallback(async () => {
     try {
@@ -368,8 +395,6 @@ export default function MerchantApp() {
     }
   }, [activePage])
 
-  const unreadCount = storeData.notifications.filter((n) => !n.read).length
-
   // Determine if bottom nav should be hidden
   const hideBottomNav = ["products", "addProduct", "openingHours", "storeInfo", "pendingOrders", "driverAssigned", "payments"].includes(activePage)
 
@@ -449,9 +474,11 @@ export default function MerchantApp() {
           )}
           {activePage === "notifications" && (
             <NotificationsPage
-              storeId={currentUserId}
-              pendingOrders={pendingOrders}
-              realtimeOrders={allOrders}
+              latestPending={latestPending}
+              latestPayment={latestPayment}
+              latestDriver={latestDriver}
+              unreadCategories={unreadCategories}
+              onCategoryViewed={(category) => markCategoryViewed(category, category === "new_order" ? latestPending?.id : category === "payment_captured" ? latestPayment?.id : latestDriver?.id)}
               onMarkAllRead={handleMarkAllRead}
               onNavigate={handleNavigate}
             />

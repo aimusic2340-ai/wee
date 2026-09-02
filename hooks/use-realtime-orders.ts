@@ -73,7 +73,7 @@ export function useRealtimeOrders(storeId: string | null): UseRealtimeOrdersRetu
       const previous = previousOrdersRef.current
       if (initializedRef.current) {
         if (orders.some(order => order.status === "pending" && !previous.has(order.id))) playSound("/sounds/order.mp3")
-        if (orders.some(order => order.driverStatus === "assigned" && previous.get(order.id)?.driverStatus !== "assigned")) playSound("/sounds/driver.mp3")
+        if (orders.some(order => order.driverStatus === "at_store" && previous.get(order.id)?.driverStatus !== "at_store")) playSound("/sounds/driver.mp3")
       }
       previousOrdersRef.current = new Map(orders.map(order => [order.id, order]))
       initializedRef.current = true
