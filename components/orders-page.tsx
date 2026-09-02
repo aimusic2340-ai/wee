@@ -1,0 +1,266 @@
+"use client"
+
+import { useState } from "react"
+import { ChevronLeft, X } from "lucide-react"
+import { isOrderCompleted, isToday, isWithinPastDays } from "@/lib/order-status"
+import type { FirestoreOrder } from "@/components/order-popup-panel"
+
+interface OrdersPageProps {
+  realtimeOrders: FirestoreOrder[]
+}
+
+export function OrdersPage({ realtimeOrders }: OrdersPageProps) {
+  const [activeTab, setActiveTab] = useState<"today" | "past">("today")
+  const [selectedOrder, setSelectedOrder] = useState<FirestoreOrder | null>(null)
+
+  const allOrders = realtimeOrders
+
+  // Filter today's orders
+  const todayOrders = allOrders.filter(order => isToday(order.createdAt))
+  const pastOrders = allOrders.filter(order => isOrderCompleted(order.status) && isWithinPastDays(order.createdAt, 90))
+
+  const displayedOrders = activeTab === "today" ? todayOrders : pastOrders
+
+  // Get the first item image from the most recent order for top right circle
+  const topOrderImage = allOrders.length > 0 && allOrders[0].items.length > 0 && allOrders[0].items[0].image
+    ? allOrders[0].items[0].image
+    : null
+
+  // Format time
+  const formatTime = (date: Date) => {
+    return date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false })
+  }
+
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Fixed Header */}
+      <div className="bg-card px-4 pt-5 pb-0 shrink-0">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <button className="text-card-foreground" aria-label="Go back">
+              <ChevronLeft className="w-6 h-6" />
+            </button>
+          </div>
+          <h1 className="text-2xl font-bold text-card-foreground">Orders</h1>
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-full bg-muted overflow-hidden">
+              {topOrderImage ? (
+                <img src={topOrderImage} alt="Recent order" className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full bg-gray-200" />
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex border-b border-border">
+          <button
+            id="todayOrdersTab"
+            onClick={() => setActiveTab("today")}
+            className={`flex-1 pb-3 text-sm font-semibold transition-colors duration-200 ${
+              activeTab === "today"
+                ? "text-primary border-b-2 border-primary"
+                : "text-muted-foreground"
+            }`}
+          >
+            {"Today's Orders"} ({todayOrders.length})
+          </button>
+          <button
+            id="pastOrdersTab"
+            onClick={() => setActiveTab("past")}
+            className={`flex-1 pb-3 text-sm font-semibold transition-colors duration-200 ${
+              activeTab === "past"
+                ? "text-primary border-b-2 border-primary"
+                : "text-muted-foreground"
+            }`}
+          >
+            Past Orders ({pastOrders.length})
+          </button>
+        </div>
+      </div>
+
+      {/* Scrollable Orders List */}
+      <div className="flex-1 overflow-y-auto px-4 pt-4 pb-2 scrollbar-hide">
+        {displayedOrders.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full text-center py-12">
+            <p className="text-muted-foreground text-sm">No orders yet</p>
+            <p className="text-muted-foreground/70 text-xs mt-1">
+              Orders will appear here when received
+            </p>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-3">
+            {displayedOrders.map((order) => (
+              <OrderCard 
+                key={order.id} 
+                order={order} 
+                formatTime={formatTime}
+                onClick={() => setSelectedOrder(order)}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Order Details Modal */}
+      {selectedOrder && (
+        <OrderDetailsModal 
+          order={selectedOrder} 
+          onClose={() => setSelectedOrder(null)} 
+        />
+      )}
+    </div>
+  )
+}
+
+interface OrderCardProps {
+  order: FirestoreOrder
+  formatTime: (date: Date) => string
+  onClick: () => void
+}
+
+function OrderCard({ order, formatTime, onClick }: OrderCardProps) {
+  // Get the first item's image for this order
+  const firstItemImage = order.items.length > 0 && order.items[0].image 
+    ? order.items[0].image 
+    : null
+
+  return (
+    <div 
+      onClick={onClick}
+      className="bg-card border border-border rounded-xl p-4 flex items-center gap-3 shadow-sm transition-all duration-200 active:scale-[0.98] cursor-pointer"
+    >
+      {/* Product image instead of order ID box */}
+      <div className="w-14 h-14 rounded-xl bg-muted overflow-hidden shrink-0">
+        {firstItemImage ? (
+          <img src={firstItemImage} alt={order.items[0]?.name || "Product"} className="w-full h-full object-cover" />
+        ) : (
+          <div className="w-full h-full bg-primary/10 flex items-center justify-center">
+            <span className="text-primary font-bold text-sm">#{order.orderId.slice(-3)}</span>
+          </div>
+        )}
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-bold text-card-foreground">#{order.orderId}</p>
+          <p className="text-sm font-bold text-card-foreground">
+            ZMW {order.subtotal.toFixed(2)}
+          </p>
+        </div>
+        <div className="flex items-center justify-between mt-1">
+          <p className="text-xs text-muted-foreground">{order.userName}</p>
+          <OrderStatusBadge status={isOrderCompleted(order.status) ? "completed" : order.status === "accepted" ? "accepted" : "pending"} />
+        </div>
+        <p className="text-xs text-muted-foreground mt-0.5">{formatTime(order.createdAt)}</p>
+      </div>
+    </div>
+  )
+}
+
+function OrderStatusBadge({ status }: { status: "pending" | "accepted" | "completed" }) {
+  // Status colors per requirements:
+  // Pending -> orange (#f97316)
+  // Accepted -> green (#22c55e)
+  // Completed (ready_for_pickup) -> blue (#1a73e8)
+  const config: Record<string, { bg: string; text: string; label: string }> = {
+    pending: { bg: "bg-[#f97316]/15", text: "text-[#f97316]", label: "Pending" },
+    accepted: { bg: "bg-[#22c55e]/15", text: "text-[#22c55e]", label: "Accepted" },
+    completed: { bg: "bg-[#1a73e8]/15", text: "text-[#1a73e8]", label: "Completed" },
+  }
+  const c = config[status] || config.pending
+  return (
+    <span className={`${c.bg} ${c.text} text-[10px] font-semibold px-2.5 py-1 rounded-full`}>
+      {c.label}
+    </span>
+  )
+}
+
+interface OrderDetailsModalProps {
+  order: FirestoreOrder
+  onClose: () => void
+}
+
+function OrderDetailsModal({ order, onClose }: OrderDetailsModalProps) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      {/* Backdrop */}
+      <div 
+        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+        onClick={onClose}
+      />
+      
+      {/* Modal */}
+      <div 
+        className="relative w-full max-w-md mx-4 bg-white rounded-2xl shadow-2xl overflow-hidden max-h-[80vh] flex flex-col"
+        style={{
+          backdropFilter: "blur(20px)",
+          background: "rgba(255, 255, 255, 0.95)",
+        }}
+      >
+        {/* Header */}
+        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between shrink-0">
+          <h2 className="text-xl font-bold text-gray-900">Order #{order.orderId}</h2>
+          <button
+            onClick={onClose}
+            className="p-1 rounded-full hover:bg-gray-100 transition-colors"
+            aria-label="Close"
+          >
+            <X className="w-5 h-5 text-gray-500" />
+          </button>
+        </div>
+
+        {/* Customer Info */}
+        <div className="px-6 py-3 border-b border-gray-100 shrink-0">
+          <h3 className="text-lg font-semibold text-gray-900">{order.userName}</h3>
+          <p className="text-sm text-gray-500">{order.destinationAddress}</p>
+        </div>
+
+        {/* Items List - Scrollable with product images */}
+        <div className="flex-1 overflow-y-auto px-6 py-3 border-b border-gray-100">
+          {order.items.map((item, index) => (
+            <div key={index} className="flex items-center gap-3 py-3 border-b border-gray-50 last:border-b-0">
+              {/* Product Image */}
+              <div className="w-12 h-12 rounded-lg bg-muted overflow-hidden shrink-0">
+                {item.image ? (
+                  <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full bg-gray-100 flex items-center justify-center">
+                    <span className="text-xs text-gray-400">No img</span>
+                  </div>
+                )}
+              </div>
+              {/* Product Details */}
+              <div className="flex-1 min-w-0">
+                <span className="text-gray-700 font-medium">
+                  {item.name}
+                </span>
+                {item.quantity && item.quantity > 1 && (
+                  <span className="text-gray-500 text-sm ml-1">x{item.quantity}</span>
+                )}
+              </div>
+              <span className="text-gray-600 font-medium shrink-0">ZMW {item.price.toFixed(2)}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Pricing Summary */}
+        <div className="px-6 py-4 shrink-0">
+          <div className="flex justify-between items-center py-1">
+            <span className="text-gray-500">Subtotal</span>
+            <span className="text-gray-700">ZMW {order.subtotal.toFixed(2)}</span>
+          </div>
+          <div className="flex justify-between items-center py-1">
+            <span className="text-gray-500">Delivery Fee</span>
+            <span className="text-gray-700">ZMW {order.deliveryFee.toFixed(2)}</span>
+          </div>
+          <div className="flex justify-between items-center py-2 mt-2 border-t border-gray-100">
+            <span className="text-lg font-bold text-gray-900">Total</span>
+            <span className="text-lg font-bold text-gray-900">ZMW {order.subtotal.toFixed(2)}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
