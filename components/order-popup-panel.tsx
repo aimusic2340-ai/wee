@@ -2,8 +2,11 @@
 
 import { useState, useEffect, useRef } from "react"
 import { Loader2 } from "lucide-react"
-import { doc, updateDoc } from "firebase/firestore"
+import { doc, serverTimestamp, updateDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
+import { toast } from "@/hooks/use-toast"
+
+export type RejectionReason = "still_closed" | "out_of_stock"
 
 export interface OrderItem {
   name: string
@@ -46,6 +49,8 @@ interface OrderPopupPanelProps {
 export function OrderPopupPanel({ order, onClose, onStatusUpdate }: OrderPopupPanelProps) {
   const [isAccepting, setIsAccepting] = useState(false)
   const [isRejecting, setIsRejecting] = useState(false)
+  const [isReasonPanelOpen, setIsReasonPanelOpen] = useState(false)
+  const [rejectionReason, setRejectionReason] = useState<"still_closed" | "out_of_stock" | null>(null)
   const [isMarkingReady, setIsMarkingReady] = useState(false)
   const [localStatus, setLocalStatus] = useState(order.status)
   const [isVisible, setIsVisible] = useState(false)
@@ -233,14 +238,23 @@ export function OrderPopupPanel({ order, onClose, onStatusUpdate }: OrderPopupPa
     }
   }
 
-  // Reject handler - PRESERVES EXISTING FIRESTORE LOGIC
-  const handleReject = async () => {
+  const handleReject = () => {
+    setRejectionReason(null)
+    setIsReasonPanelOpen(true)
+  }
+
+  const confirmReject = async () => {
+    if (!rejectionReason) return
     setIsRejecting(true)
     try {
       await updateDoc(doc(db, "orders", order.id), {
-        status: "rejected"
+        status: "rejected",
+        rejectionReason,
+        rejectedAt: serverTimestamp(),
       })
       onStatusUpdate(order.id, "rejected")
+      toast({ title: "Order rejected", description: rejectionReason === "still_closed" ? "Kindly update your opening hours in Settings → Opening Hours" : "Mark the relevant product as unavailable in Products so this doesn't happen again" })
+      setIsReasonPanelOpen(false)
       animateExit()
     } catch (error) {
       console.error("Error rejecting order:", error)
@@ -354,6 +368,26 @@ export function OrderPopupPanel({ order, onClose, onStatusUpdate }: OrderPopupPa
             </div>
           </div>
         </div>
+
+        {isReasonPanelOpen && (
+          <div className="absolute inset-x-0 bottom-0 z-10 rounded-t-2xl border-t border-gray-200 bg-white p-5 shadow-2xl">
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-base font-bold text-gray-900">Why are you rejecting this order?</h3>
+              <button type="button" onClick={() => setIsReasonPanelOpen(false)} className="text-sm text-gray-500" disabled={isRejecting}>Cancel</button>
+            </div>
+            <div className="flex flex-col gap-2">
+              {([['still_closed', 'Still closed'], ['out_of_stock', 'Out of stock']] as const).map(([value, label]) => (
+                <label key={value} className="flex cursor-pointer items-center gap-3 rounded-xl border border-gray-200 p-3 text-sm text-gray-700">
+                  <input type="radio" name={`rejection-${order.id}`} value={value} checked={rejectionReason === value} onChange={() => setRejectionReason(value)} className="size-4 accent-orange-500" />
+                  {label}
+                </label>
+              ))}
+            </div>
+            <button type="button" onClick={confirmReject} disabled={!rejectionReason || isRejecting} className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-red-500 py-3 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">
+              {isRejecting && <Loader2 className="size-4 animate-spin" />} Done
+            </button>
+          </div>
+        )}
 
         {/* Fixed Bottom Section - Action Buttons */}
         <div className="flex-shrink-0 px-5 py-4 bg-white border-t border-gray-100">
