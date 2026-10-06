@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import { Loader2 } from "lucide-react"
-import { doc, serverTimestamp, updateDoc } from "firebase/firestore"
+import { doc, runTransaction, serverTimestamp } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { toast } from "@/hooks/use-toast"
 
@@ -226,9 +226,18 @@ export function OrderPopupPanel({ order, onClose, onStatusUpdate }: OrderPopupPa
   const handleAccept = async () => {
     setIsAccepting(true)
     try {
-      await updateDoc(doc(db, "orders", order.id), {
-        status: "accepted"
+      const didUpdate = await runTransaction(db, async (transaction) => {
+        const orderRef = doc(db, "orders", order.id)
+        const snapshot = await transaction.get(orderRef)
+        if (!snapshot.exists() || snapshot.data().status !== "pending") return false
+        transaction.update(orderRef, { status: "accepted" })
+        return true
       })
+      if (!didUpdate) {
+        toast({ title: "This order is no longer available" })
+        onClose()
+        return
+      }
       setLocalStatus("accepted")
       onStatusUpdate(order.id, "accepted")
     } catch (error) {
@@ -247,11 +256,18 @@ export function OrderPopupPanel({ order, onClose, onStatusUpdate }: OrderPopupPa
     if (!rejectionReason) return
     setIsRejecting(true)
     try {
-      await updateDoc(doc(db, "orders", order.id), {
-        status: "rejected",
-        rejectionReason,
-        rejectedAt: serverTimestamp(),
+      const didUpdate = await runTransaction(db, async (transaction) => {
+        const orderRef = doc(db, "orders", order.id)
+        const snapshot = await transaction.get(orderRef)
+        if (!snapshot.exists() || snapshot.data().status !== "pending") return false
+        transaction.update(orderRef, { status: "rejected", rejectionReason, rejectedAt: serverTimestamp() })
+        return true
       })
+      if (!didUpdate) {
+        toast({ title: "This order is no longer available" })
+        onClose()
+        return
+      }
       onStatusUpdate(order.id, "rejected")
       toast({ title: "Order rejected", description: rejectionReason === "still_closed" ? "Kindly update your opening hours in Settings → Opening Hours" : "Mark the relevant product as unavailable in Products so this doesn't happen again" })
       setIsReasonPanelOpen(false)
@@ -267,9 +283,18 @@ export function OrderPopupPanel({ order, onClose, onStatusUpdate }: OrderPopupPa
   const handleMarkReady = async () => {
     setIsMarkingReady(true)
     try {
-      await updateDoc(doc(db, "orders", order.id), {
-        status: "ready_for_pickup"
+      const didUpdate = await runTransaction(db, async (transaction) => {
+        const orderRef = doc(db, "orders", order.id)
+        const snapshot = await transaction.get(orderRef)
+        if (!snapshot.exists() || snapshot.data().status !== "accepted") return false
+        transaction.update(orderRef, { status: "ready_for_pickup" })
+        return true
       })
+      if (!didUpdate) {
+        toast({ title: "This order is no longer available" })
+        onClose()
+        return
+      }
       onStatusUpdate(order.id, "ready_for_pickup")
       animateExit()
     } catch (error) {
@@ -347,10 +372,13 @@ export function OrderPopupPanel({ order, onClose, onStatusUpdate }: OrderPopupPa
           <div className="px-5 py-4 border-b border-gray-100">
             <p className="text-xs text-gray-400 uppercase tracking-wide mb-3">Items</p>
             {order.items.map((item, index) => (
-              <div key={index} className="flex justify-between items-center py-2">
-                <span className="text-gray-700 text-sm">
-                  {item.name} {item.quantity && item.quantity > 1 ? `x${item.quantity}` : ""}
-                </span>
+              <div key={index} className="flex items-center justify-between gap-3 py-2">
+                <div className="flex min-w-0 items-center gap-3">
+                  <img src={item.image || "/icon.svg"} alt="" loading="lazy" className="size-10 shrink-0 rounded-lg object-cover" onError={(event) => { event.currentTarget.src = "/icon.svg" }} />
+                  <span className="truncate text-gray-700 text-sm">
+                    {item.name} {item.quantity && item.quantity > 1 ? `x${item.quantity}` : ""}
+                  </span>
+                </div>
                 <span className="text-gray-600 text-sm font-medium">ZMW {item.price.toFixed(2)}</span>
               </div>
             ))}

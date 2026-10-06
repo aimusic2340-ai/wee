@@ -1,6 +1,7 @@
 // Firebase configuration and initialization
 import { initializeApp, getApps } from "firebase/app"
 import { getAuth } from "firebase/auth"
+import { getDatabase } from "firebase/database"
 import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from "firebase/firestore"
 
 // Firebase configuration
@@ -20,6 +21,7 @@ const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0
 
 // Initialize Firebase services
 export const auth = getAuth(app)
+export const rtdb = getDatabase(app)
 
 // Initialize Firestore with persistent cache (new recommended API)
 export const db = initializeFirestore(app, {
