@@ -18,7 +18,7 @@ const GEOAPIFY_API_KEY = process.env.NEXT_PUBLIC_GEOAPIFY_API_KEY
 // ============================================
 // EXPORTED FUNCTION - UI CALLS THIS
 // ============================================
-export async function reverseGeocode(lat: number, lng: number): Promise<AddressSuggestion | null> {
+export const reverseGeocode = async (lat: number, lng: number): Promise<AddressSuggestion | null> => {
   if (!GEOAPIFY_API_KEY) return null
   try {
     const response = await fetch(`https://api.geoapify.com/v1/geocode/reverse?lat=${lat}&lon=${lng}&format=json&apiKey=${GEOAPIFY_API_KEY}`)
