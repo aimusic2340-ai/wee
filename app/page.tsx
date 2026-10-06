@@ -22,6 +22,7 @@ import { BottomNavigation } from "@/components/bottom-navigation"
 import { OrderPopupPanel } from "@/components/order-popup-panel"
 import { useRealtimeOrders } from "@/hooks/use-realtime-orders"
 import { placeholderStoreData } from "@/lib/store-data"
+import { Toaster } from "@/components/ui/toaster"
 import type { StoreData, Product, OpeningHour, StoreInfo } from "@/lib/store-data"
 
 type AuthPage = "welcome" | "login" | "signup"
@@ -440,6 +441,7 @@ export default function MerchantApp() {
   // Show main dashboard app
   return (
     <div className="flex flex-col h-dvh w-full max-w-[1200px] mx-auto bg-background">
+      <Toaster />
       {/* Global Order Popup Panel */}
       {pendingOrderForPopup && (
         <OrderPopupPanel
