@@ -205,12 +205,15 @@ export function StoreInfoPage({ storeInfo, storeId, onBack, onSave }: StoreInfoP
                 placeholder="Enter store address"
                 value={address}
                 onChange={(e) => handleAddressSearch(e.target.value)}
-                onFocus={() => address.length > 2 && setShowAddressSuggestions(true)}
+                onFocus={() => setShowAddressSuggestions(true)}
                 onBlur={() => setTimeout(() => setShowAddressSuggestions(false), 200)}
                 className="w-full pl-11 pr-4 py-3 bg-card border border-border rounded-xl text-sm text-card-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
               />
-              {showAddressSuggestions && addressSuggestions.length > 0 && (
+              {showAddressSuggestions && (
                 <div className="absolute top-full left-0 right-0 mt-1 rounded-xl overflow-hidden z-20 max-h-48 overflow-y-auto bg-card border border-border shadow-lg">
+                  <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={useCurrentLocation} className="w-full border-b border-border px-4 py-2 text-left text-sm font-medium text-card-foreground hover:bg-accent">
+                    Use my current location
+                  </button>
                   {addressSuggestions.map((suggestion) => (
                     <button
                       key={suggestion.id}

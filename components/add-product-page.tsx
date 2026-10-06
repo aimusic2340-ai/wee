@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useRef } from "react"
-import { ChevronLeft, Camera, Plus, Loader2 } from "lucide-react"
+import { ChevronLeft, Camera, Plus, Loader2, X } from "lucide-react"
 import { doc, collection, setDoc, serverTimestamp } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { uploadProductImage } from "@/lib/cloudinary"
@@ -36,13 +36,17 @@ export function AddProductPage({ product, storeId, storeName, storeAddress, stor
   const [price, setPrice] = useState(product?.price?.toString() || "")
   const initialUnitMatch = product?.unit?.match(/^(\d+(?:\.\d+)?)\s*(.*)$/)
   const initialUnitType = initialUnitMatch?.[2] || (product?.unit ? product.unit : "item")
+  const unitOptions = units.includes(initialUnitType) ? units : [initialUnitType, ...units]
   const [unitAmount, setUnitAmount] = useState(initialUnitMatch?.[1] || "1")
   const [unitType, setUnitType] = useState(initialUnitType)
   const [description, setDescription] = useState(product?.description || "")
   const [available, setAvailable] = useState(product?.available ?? true)
-  const [image, setImage] = useState(product?.image || "")
+  const existingImages = (product?.images?.length ? product.images : product?.image ? [product.image] : []).filter(Boolean).slice(0, 3)
+  const [image, setImage] = useState(existingImages[0] || "")
+  const [imageUrls, setImageUrls] = useState<string[]>(existingImages)
   const [stock, setStock] = useState(product?.stock?.toString() || "0")
-  const [imageFile, setImageFile] = useState<File | null>(null)
+  const [imageFiles, setImageFiles] = useState<(File | null)[]>([null, null, null])
+  const [activeImageSlot, setActiveImageSlot] = useState(0)
   const [isUploading, setIsUploading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -52,19 +56,32 @@ export function AddProductPage({ product, storeId, storeName, storeAddress, stor
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
-    if (file) {
-      setImageFile(file)
-      // Show preview immediately
-      const reader = new FileReader()
-      reader.onload = (event) => {
-        setImage(event.target?.result as string)
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (event) => {
+      const preview = event.target?.result as string
+      if (storeCategory === "clothes") {
+        setImageUrls((current) => { const next = [...current]; next[activeImageSlot] = preview; return next })
+        setImageFiles((current) => { const next = [...current]; next[activeImageSlot] = file; return next })
+      } else {
+        setImage(preview)
       }
-      reader.readAsDataURL(file)
     }
+    reader.readAsDataURL(file)
+    e.target.value = ""
+  }
+
+  const removeImage = (slot: number) => {
+    setImageUrls((current) => current.filter((_, index) => index !== slot))
+    setImageFiles((current) => current.filter((_, index) => index !== slot))
   }
 
   const handleSave = async () => {
     if (!name.trim() || !price) return
+    if (storeCategory === "clothes" && imageUrls.filter(Boolean).length === 0) {
+      setError("Add at least one photo")
+      return
+    }
 
     setError(null)
     setIsSaving(true)
@@ -73,14 +90,22 @@ export function AddProductPage({ product, storeId, storeName, storeAddress, stor
       // Generate product ID using Firestore document reference
       const productId = product?.id || doc(collection(db, "stores", storeId, "products")).id
       
-      let imageUrl = image
-
-      // Upload image to Cloudinary if a new file was selected
-      if (imageFile) {
+      let savedImageUrls = imageUrls.filter(Boolean)
+      if (storeCategory === "clothes") {
         setIsUploading(true)
         try {
-          imageUrl = await uploadProductImage(imageFile, storeId, productId)
-        } catch (uploadError) {
+          const uploaded = await Promise.all(savedImageUrls.map(async (url, index) => imageFiles[index] ? uploadProductImage(imageFiles[index]!, storeId, productId) : url))
+          savedImageUrls = uploaded.filter(Boolean)
+        } catch {
+          setError("Failed to upload image. Please try again.")
+          setIsSaving(false)
+          setIsUploading(false)
+          return
+        }
+        setIsUploading(false)
+      } else if (imageFiles[0]) {
+        setIsUploading(true)
+        try { savedImageUrls = [await uploadProductImage(imageFiles[0]!, storeId, productId)] } catch {
           setError("Failed to upload image. Please try again.")
           setIsSaving(false)
           setIsUploading(false)
@@ -88,12 +113,14 @@ export function AddProductPage({ product, storeId, storeName, storeAddress, stor
         }
         setIsUploading(false)
       }
+      const imageUrl = storeCategory === "clothes" ? (savedImageUrls[0] || "") : (savedImageUrls[0] || image || "")
 
       // Prepare product data for Firestore
       const productData = {
         name: name.trim(),
         price: parseFloat(price) || 0,
         imageUrl: imageUrl || "",
+        ...(storeCategory === "clothes" ? { imageUrls: savedImageUrls } : {}),
         description: description.trim(),
         category,
         unit: `${unitAmount}${unitType}`,
@@ -168,44 +195,24 @@ export function AddProductPage({ product, storeId, storeName, storeAddress, stor
           )}
 
           {/* Image Upload */}
-          <div className="flex justify-center">
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isUploading || isSaving}
-              className="w-full max-w-xs h-36 border-2 border-dashed border-border rounded-xl flex flex-col items-center justify-center gap-2 bg-card hover:bg-accent/50 transition-colors relative overflow-hidden disabled:cursor-not-allowed"
-            >
-              {isUploading && (
-                <div className="absolute inset-0 bg-background/80 flex items-center justify-center z-10">
-                  <div className="flex flex-col items-center gap-2">
-                    <Loader2 className="w-6 h-6 text-primary animate-spin" />
-                    <span className="text-xs text-muted-foreground">Uploading...</span>
-                  </div>
-                </div>
-              )}
-              {image ? (
-                <img
-                  src={image}
-                  alt="Product preview"
-                  className="w-full h-full object-cover rounded-xl"
-                />
-              ) : (
-                <>
-                  <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
-                    <Camera className="w-6 h-6 text-primary" />
-                    <Plus className="w-3 h-3 text-primary absolute translate-x-3 -translate-y-3" />
-                  </div>
-                  <span className="text-sm text-muted-foreground">Tap to Upload Image</span>
-                </>
-              )}
-            </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              onChange={handleImageUpload}
-              className="hidden"
-            />
-          </div>
+          {storeCategory === "clothes" ? (
+            <div className="grid grid-cols-3 gap-2">
+              {[0, 1, 2].map((slot) => (
+                <button key={slot} type="button" onClick={() => { setActiveImageSlot(slot); fileInputRef.current?.click() }} disabled={isUploading || isSaving} className="relative flex aspect-square flex-col items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-border bg-card">
+                  {imageUrls[slot] ? <img src={imageUrls[slot]} alt={slot === 0 ? "Main product photo" : `Product photo ${slot + 1}`} className="size-full object-cover" /> : <><Camera className="size-6 text-primary" /><span className="mt-1 px-1 text-center text-[10px] text-muted-foreground">{slot === 0 ? "Main photo (required)" : `Photo ${slot + 1} (optional)`}</span></>}
+                  {imageUrls[slot] && <span role="button" tabIndex={0} aria-label={`Remove photo ${slot + 1}`} onClick={(event) => { event.stopPropagation(); removeImage(slot) }} className="absolute right-1 top-1 rounded-full bg-black/70 p-1 text-white"><X className="size-3" /></span>}
+                </button>
+              ))}
+              <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
+            </div>
+          ) : (
+            <div className="flex justify-center">
+              <button type="button" onClick={() => { setActiveImageSlot(0); fileInputRef.current?.click() }} disabled={isUploading || isSaving} className="relative flex h-36 w-full max-w-xs flex-col items-center justify-center gap-2 overflow-hidden rounded-xl border-2 border-dashed border-border bg-card">
+                {image ? <img src={image} alt="Product preview" className="size-full rounded-xl object-cover" /> : <><Camera className="size-6 text-primary" /><span className="text-sm text-muted-foreground">Tap to Upload Image</span></>}
+              </button>
+              <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
+            </div>
+          )}
 
           {/* Product Name */}
           <div className="flex flex-col gap-1.5">
@@ -285,7 +292,7 @@ export function AddProductPage({ product, storeId, storeName, storeAddress, stor
                   className="w-20 shrink-0 border-l border-border bg-transparent px-2 py-3 text-sm text-card-foreground focus:outline-none cursor-pointer"
                   aria-label="Unit type"
                 >
-                  {units.map((u) => (
+                  {unitOptions.map((u) => (
                     <option key={u} value={u}>{u}</option>
                   ))}
                 </select>

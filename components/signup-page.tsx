@@ -483,7 +483,7 @@ export function SignupPage({ onSignupSuccess, onSignIn }: SignupPageProps) {
                       placeholder="Search address..."
                       value={address}
                       onChange={(e) => handleAddressSearch(e.target.value)}
-                      onFocus={() => address.length > 2 && setShowAddressSuggestions(true)}
+                      onFocus={() => setShowAddressSuggestions(true)}
                       onBlur={() => setTimeout(() => setShowAddressSuggestions(false), 200)}
                       className="w-full bg-transparent text-white placeholder:text-white/50 outline-none text-sm mt-1"
                     />
@@ -492,14 +492,17 @@ export function SignupPage({ onSignupSuccess, onSignIn }: SignupPageProps) {
                 </div>
 
                 {/* Address Suggestions Dropdown */}
-                {showAddressSuggestions && addressSuggestions.length > 0 && (
-                  <div
+{showAddressSuggestions && (
+                    <div
                     className="absolute top-full left-0 right-0 mt-1 rounded-xl overflow-hidden z-20 max-h-40 overflow-y-auto"
                     style={{
                       background: "rgba(255, 255, 255, 0.95)",
                       border: "1px solid rgba(255, 255, 255, 0.5)",
                     }}
                   >
+                    <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={useCurrentLocation} className="w-full border-b border-gray-200 px-4 py-2 text-left text-sm font-medium text-gray-800 hover:bg-gray-100">
+                      Use my current location
+                    </button>
                     {addressSuggestions.map((suggestion) => (
                       <button
                         key={suggestion.id}
