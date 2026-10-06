@@ -2,7 +2,7 @@
 
 import { useState, useRef } from "react"
 import { ChevronLeft, Upload, MapPin, Phone, Loader2 } from "lucide-react"
-import { searchAddress, type AddressSuggestion } from "@/lib/address-service"
+import { searchAddress, reverseGeocode, type AddressSuggestion } from "@/lib/address-service"
 import { doc, setDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { uploadStoreLogo } from "@/lib/cloudinary"
@@ -40,6 +40,15 @@ export function StoreInfoPage({ storeInfo, storeId, onBack, onSave }: StoreInfoP
       setAddressSuggestions([])
       setShowAddressSuggestions(false)
     }
+  }
+
+  const useCurrentLocation = () => {
+    if (!navigator.geolocation) return setError("Location is not supported by this browser")
+    navigator.geolocation.getCurrentPosition(async ({ coords }) => {
+      const suggestion = await reverseGeocode(coords.latitude, coords.longitude)
+      if (suggestion) { setAddress(suggestion.fullAddress); setAddressCoords({ lat: coords.latitude, lng: coords.longitude }); setShowAddressSuggestions(false) }
+      else setError("Could not find an address for your location")
+    }, error => setError(error.code === error.PERMISSION_DENIED ? "Please allow location access to use your current location" : "Location request timed out. Please try again"), { timeout: 10000 })
   }
 
   const handleSelectAddress = (suggestion: AddressSuggestion) => {

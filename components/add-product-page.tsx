@@ -12,30 +12,32 @@ interface AddProductPageProps {
   storeId: string
   storeName: string
   storeAddress: string
+  storeCategory?: string
   onBack: () => void
   onSave: (product: Omit<Product, "id"> & { id?: string }) => void
 }
 
-const categories = [
-  "Fresh Produce",
-  "Fast Food",
-  "Healthy",
-  "Desserts",
-  "Japanese",
-  "Beverages",
-  "Snacks",
-  "Other",
-]
+const categoryOptions: Record<string, { label: string; foodCategory?: string }[]> = {
+  food: [{ label: "Fast Food", foodCategory: "food" }, { label: "Healthy", foodCategory: "food" }, { label: "Snacks", foodCategory: "food" }, { label: "Fresh Produce", foodCategory: "food" }, { label: "Japanese", foodCategory: "food" }, { label: "Desserts", foodCategory: "dessert" }, { label: "Beverages", foodCategory: "drinks" }, { label: "Other", foodCategory: "food" }],
+  clothes: ["Men", "Women", "Kids", "Shoes", "Bags & Accessories", "Chitenge & Traditional Wear", "Sportswear", "Underwear & Socks", "Other"].map(label => ({ label })),
+  hardware: ["Building Materials", "Roofing", "Plumbing", "Electrical", "Paint & Finishes", "Tools & Equipment", "Doors Windows & Locks", "Nails Screws & Fasteners", "Garden & Outdoor", "Safety Gear", "Other"].map(label => ({ label })),
+  market: [{ label: "Vegetables", foodCategory: "vegetables" }, { label: "Fruits", foodCategory: "fruits" }, { label: "Dry Food - beans, groundnuts, kapenta, rice", foodCategory: "dry_food" }, { label: "Utensils", foodCategory: "utensils" }, { label: "Baskets & Buckets", foodCategory: "baskets_buckets" }, { label: "Shoes", foodCategory: "shoes" }, { label: "Garden Items", foodCategory: "garden" }, { label: "Household Items", foodCategory: "household" }, { label: "Other", foodCategory: "other" }],
+}
 
 const units = ["item", "bag", "g", "kg", "ml", "L", "pack"]
 
-export function AddProductPage({ product, storeId, storeName, storeAddress, onBack, onSave }: AddProductPageProps) {
+export function AddProductPage({ product, storeId, storeName, storeAddress, storeCategory = "food", onBack, onSave }: AddProductPageProps) {
+  const categories = categoryOptions[storeCategory] || categoryOptions.food
+  const savedCategory = product?.category || categories[0].label
+  const options = categories.some(option => option.label === savedCategory) ? categories : [...categories, { label: savedCategory, foodCategory: product?.foodCategory }]
+  const selectedCategory = options.find(option => option.label === savedCategory)
   const [name, setName] = useState(product?.name || "")
-  const [category, setCategory] = useState(product?.category || "Fresh Produce")
+  const [category, setCategory] = useState(savedCategory)
   const [price, setPrice] = useState(product?.price?.toString() || "")
-  const initialUnitMatch = product?.unit?.match(/^(\\d+(?:\\.\\d+)?)(.*)$/)
+  const initialUnitMatch = product?.unit?.match(/^(\d+(?:\.\d+)?)\s*(.*)$/)
+  const initialUnitType = initialUnitMatch?.[2] || (product?.unit ? product.unit : "item")
   const [unitAmount, setUnitAmount] = useState(initialUnitMatch?.[1] || "1")
-  const [unitType, setUnitType] = useState(initialUnitMatch?.[2] || product?.unit || "item")
+  const [unitType, setUnitType] = useState(initialUnitType)
   const [description, setDescription] = useState(product?.description || "")
   const [available, setAvailable] = useState(product?.available ?? true)
   const [image, setImage] = useState(product?.image || "")
@@ -97,10 +99,12 @@ export function AddProductPage({ product, storeId, storeName, storeAddress, onBa
         unit: `${unitAmount}${unitType}`,
         stockQuantity: parseInt(stock) || 0,
         availability: available,
+        available,
         storeId,
         storeName,
         storeAddress,
-        createdAt: serverTimestamp(),
+        ...(selectedCategory?.foodCategory && (storeCategory === "food" || storeCategory === "market") ? { foodCategory: selectedCategory.foodCategory } : {}),
+        ...(isEditing ? {} : { createdAt: serverTimestamp() }),
       }
 
       // Save to Firestore
@@ -115,8 +119,9 @@ export function AddProductPage({ product, storeId, storeName, storeAddress, onBa
         unit: `${unitAmount}${unitType}`,
         description: description.trim(),
         available,
-        image: imageUrl || "/images/placeholder.jpg",
+        image: imageUrl || "",
         stock: parseInt(stock) || 0,
+        foodCategory: selectedCategory?.foodCategory,
       })
     } catch (err) {
       console.error("Error saving product:", err)
@@ -231,9 +236,9 @@ export function AddProductPage({ product, storeId, storeName, storeAddress, onBa
                 backgroundPosition: "right 12px center",
               }}
             >
-              {categories.map((cat) => (
-                <option key={cat} value={cat}>
-                  {cat}
+              {options.map((cat) => (
+                <option key={cat.label} value={cat.label}>
+                  {cat.label}
                 </option>
               ))}
             </select>

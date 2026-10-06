@@ -18,6 +18,21 @@ const GEOAPIFY_API_KEY = process.env.NEXT_PUBLIC_GEOAPIFY_API_KEY
 // ============================================
 // EXPORTED FUNCTION - UI CALLS THIS
 // ============================================
+export async function reverseGeocode(lat: number, lng: number): Promise<AddressSuggestion | null> {
+  if (!GEOAPIFY_API_KEY) return null
+  try {
+    const response = await fetch(`https://api.geoapify.com/v1/geocode/reverse?lat=${lat}&lon=${lng}&format=json&apiKey=${GEOAPIFY_API_KEY}`)
+    if (!response.ok) return null
+    const data = await response.json()
+    const result = data.results?.[0]
+    if (!result) return null
+    return { id: result.place_id || `${lat},${lng}`, name: result.address_line1 || result.formatted || "", fullAddress: result.formatted || "", coordinates: { lat, lng } }
+  } catch (error) {
+    console.error("Reverse geocoding error:", error)
+    return null
+  }
+}
+
 export async function searchAddress(query: string): Promise<AddressSuggestion[]> {
   if (!query || query.length < 2) {
     return []

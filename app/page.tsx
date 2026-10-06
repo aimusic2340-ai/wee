@@ -83,8 +83,10 @@ export default function MerchantApp() {
             category: productData.category || "",
             unit: productData.unit || "item",
             description: productData.description || "",
-            image: productData.imageUrl || "/images/placeholder.jpg",
-            available: productData.availability ?? true,
+            image: productData.imageUrl || "",
+            images: Array.isArray(productData.imageUrls) ? productData.imageUrls : undefined,
+            available: productData.availability ?? productData.available ?? true,
+            foodCategory: productData.foodCategory || undefined,
           }
         })
 
@@ -110,6 +112,7 @@ export default function MerchantApp() {
         setStoreData({
           ...placeholderStoreData,
           storeName: data.storeName || placeholderStoreData.storeName,
+          storeCategory: data.category || "food",
           // Rating and review count are ALWAYS loaded from the Firestore store doc.
           // They are written by the backend rating endpoint, never calculated from orders.
           customerRating: typeof data.rating === "number" ? data.rating : 0,
@@ -510,8 +513,9 @@ export default function MerchantApp() {
               product={editingProduct}
               storeId={currentUserId}
               storeName={storeData.storeName}
-              storeAddress={storeData.storeInfo.address}
-              onBack={handleBack}
+  storeAddress={storeData.storeInfo.address}
+  storeCategory={storeData.storeCategory}
+  onBack={handleBack}
               onSave={handleSaveProduct}
             />
           )}

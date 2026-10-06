@@ -5,7 +5,7 @@ import { Mail, Lock, Phone, Search, ChevronLeft, User, Store, MapPin } from "luc
 import { createUserWithEmailAndPassword } from "firebase/auth"
 import { doc, setDoc, serverTimestamp } from "firebase/firestore"
 import { auth, db } from "@/lib/firebase"
-import { searchAddress, type AddressSuggestion } from "@/lib/address-service"
+import { searchAddress, reverseGeocode, type AddressSuggestion } from "@/lib/address-service"
 import { WaterDroplets } from "@/components/water-droplets"
 
 interface SignupPageProps {
@@ -26,6 +26,7 @@ const storeCategories = [
   { value: "food", label: "Food" },
   { value: "clothes", label: "Clothes" },
   { value: "hardware", label: "Hardware" },
+  { value: "market", label: "Shop & Market" },
 ]
 
 export function SignupPage({ onSignupSuccess, onSignIn }: SignupPageProps) {
@@ -134,6 +135,15 @@ export function SignupPage({ onSignupSuccess, onSignIn }: SignupPageProps) {
       setAddressSuggestions([])
       setShowAddressSuggestions(false)
     }
+  }, [])
+
+  const useCurrentLocation = useCallback(() => {
+    if (!navigator.geolocation) return setError("Location is not supported by this browser")
+    navigator.geolocation.getCurrentPosition(async ({ coords }) => {
+      const suggestion = await reverseGeocode(coords.latitude, coords.longitude)
+      if (suggestion) { setAddress(suggestion.fullAddress); setAddressCoords({ lat: coords.latitude, lng: coords.longitude }); setShowAddressSuggestions(false) }
+      else setError("Could not find an address for your location")
+    }, error => setError(error.code === error.PERMISSION_DENIED ? "Please allow location access to use your current location" : "Location request timed out. Please try again"), { timeout: 10000 })
   }, [])
 
   const handleSelectAddress = useCallback((suggestion: AddressSuggestion) => {
