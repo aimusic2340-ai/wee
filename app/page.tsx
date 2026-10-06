@@ -45,10 +45,11 @@ export default function MerchantApp() {
     completedOrders,
     allOrders,
     todayOrders,
-    pendingOrderForPopup,
-    dismissPopup,
+    activeOrders,
     handleStatusUpdate,
   } = useRealtimeOrders(currentUserId)
+
+  const [selectedOrderIndex, setSelectedOrderIndex] = useState(0)
 
   const pageOrder = ["dashboard", "orders", "notifications", "payments", "settings"]
 
@@ -446,10 +447,10 @@ export default function MerchantApp() {
     <div className="flex flex-col h-dvh w-full max-w-[1200px] mx-auto bg-background">
       <Toaster />
       {/* Global Order Popup Panel */}
-      {pendingOrderForPopup && (
+      {activeOrders.length > 0 && (
         <OrderPopupPanel
-          order={pendingOrderForPopup}
-          onClose={dismissPopup}
+          order={activeOrders[Math.min(selectedOrderIndex, activeOrders.length - 1)]}
+          onClose={() => setSelectedOrderIndex(0)}
           onStatusUpdate={handleStatusUpdate}
         />
       )}
